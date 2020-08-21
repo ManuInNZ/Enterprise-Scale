@@ -10,7 +10,7 @@
                 "name": "lzSettings",
                 "label": "Enterprise-Scale Company prefix",
                 "subLabel": {
-                    "preValidation": "Provide a company prefix for the existing management group structure.",
+                    "preValidation": "Provide a company prefix for the management group structure that will be created.",
                     "postValidation": "Done"
                 },
                 "bladeTitle": "Company prefix",
@@ -28,7 +28,7 @@
                     {
                         "name": "esMgmtGroup",
                         "type": "Microsoft.Common.TextBox",
-                        "label": "Existing Management Group prefix",
+                        "label": "Management Group prefix",
                         "toolTip": "Provide a prefix for management group structure, 1-5 characters.",
                         "defaultValue": "",
                         "constraints": {
@@ -40,8 +40,8 @@
                 ]
             },
             {
-                "name": "esConnectivityGoalState",
-                "label": "Add connectivity (Virtual WAN) to Enterprise-Scale Foundation",
+                "name": "esGoalState",
+                "label": "Platform configuration",
                 "subLabel": {
                     "preValidation": "Select 'Yes' if goal state should be enforced during deployment. Select 'No' if you want to do it post deployment using Azure Policy.",
                     "postValidation": "Done"
@@ -54,16 +54,16 @@
                         "visible": true,
                         "options": {
                             "icon": "Info",
-                            "text": "To enable Virtual WAN connectivity, you must allocate a connectivity Subscription. Please note, this Subscription will be moved to the connectivity Management Group, and ARM will deploy a Virtual WAN with the first Virtual Hub and requisite settings. We recommend using a new Subscription with no existing resources.",
+                            "text": "To setup the platform resources, you must allocate a management Subscription. Please note, this Subscription will be moved to the platform Management Group, and ARM will deploy resources and requisite settings. We recommend using a new Subscription with no existing resources.",
                             "uri": "https://github.com/Azure/Enterprise-Scale/blob/main/docs/reference/Readme.md"
                         }
                     },
                     {
-                        "name": "esVwan",
+                        "name": "esLogAnalytics",
                         "type": "Microsoft.Common.OptionsGroup",
-                        "label": "Deploy Virtual WAN",
+                        "label": "Deploy Log Analytics workspace and enable monitoring for your platform and resources",
                         "defaultValue": "No",
-                        "toolTip": "If 'Yes' is selected when also adding a subscription for connectivity, ARM will deploy Virtual WAN",
+                        "toolTip": "If 'Yes' is selected when also adding a subscription for management, ARM will deploy resources and enable them for continious compliance.",
                         "constraints": {
                             "allowedValues": [
                                 {
@@ -79,7 +79,7 @@
                         "visible": true
                     },
                     {
-                        "name": "nwSubsApi",
+                        "name": "mgmtSubsApi",
                         "type": "Microsoft.Solutions.ArmApiControl",
                         "request": {
                             "method": "GET",
@@ -87,28 +87,68 @@
                         }
                     },
                     {
-                        "name": "esConnectivitySub",
+                        "name": "esMgmtSub",
                         "type": "Microsoft.Common.DropDown",
-                        "label": "Connectivity subscription (required)",
+                        "label": "Platform subscription (required)",
                         "toolTip": "",
                         "multiselect": false,
                         "selectAll": true,
                         "filter": true,
                         "filterPlaceholder": "Filter items ...",
                         "multiLine": true,
-                        "visible": "[equals(steps('esConnectivityGoalState').esVwan, 'Yes')]",
+                        "visible": "[or(equals(steps('esGoalState').esLogAnalytics, 'Yes'), equals(steps('esGoalState').esHub, 'Yes'))]",
                         "constraints": {
-                            "allowedValues": "[map(steps('esConnectivityGoalState').nwSubsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"description\":\"', sub.subscriptionId, '\",\"value\":\"', toLower(sub.subscriptionId), '\"}')) )]",
+                            "allowedValues": "[map(steps('esGoalState').mgmtSubsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"description\":\"', sub.subscriptionId, '\",\"value\":\"', toLower(sub.subscriptionId), '\"}')) )]",
                             "required": true
                         }
                     },
                     {
-                        "name": "esAddress",
+                        "name": "esAsc",
+                        "type": "Microsoft.Common.OptionsGroup",
+                        "label": "Enable Azure Security Monitoring for your platform and resources",
+                        "defaultValue": "No",
+                        "toolTip": "If 'Yes' is selected when also adding a subscription for management, ARM will deploy Azure policy to enable ASC monitoring",
+                        "constraints": {
+                            "allowedValues": [
+                                {
+                                    "label": "Yes (recommended)",
+                                    "value": "Yes"
+                                },
+                                {
+                                    "label": "No",
+                                    "value": "No"
+                                }
+                            ]
+                        },
+                        "visible": true
+                    },
+                    {
+                        "name": "esHub",
+                        "type": "Microsoft.Common.OptionsGroup",
+                        "label": "Deploy virtual hub",
+                        "defaultValue": "No",
+                        "toolTip": "If 'Yes' is selected when also adding a subscription for connectivity, ARM will deploy virtual network for hub",
+                        "constraints": {
+                            "allowedValues": [
+                                {
+                                    "label": "Yes (recommended)",
+                                    "value": "Yes"
+                                },
+                                {
+                                    "label": "No",
+                                    "value": "No"
+                                }
+                            ]
+                        },
+                        "visible": true
+                    },
+                    {
+                        "name": "esAddressHub",
                         "type": "Microsoft.Common.TextBox",
-                        "label": "Address space (required for Virtual Hub)",
-                        "toolTip": "Provide address prefix in CIDR notation (e.g 192.168.1.0/24)",
-                        "defaultValue": "192.168.0.0/16",
-                        "visible": "[equals(steps('esConnectivityGoalState').esVwan, 'Yes')]",
+                        "label": "Address space (required for virtual network hub)",
+                        "toolTip": "Provide address prefix in CIDR notation (e.g 10.100.0.0/16)",
+                        "defaultValue": "10.100.0.0/16",
+                        "visible": "[equals(steps('esGoalState').esHub, 'Yes')]",
                         "constraints": {
                             "required": true,
                             "validationMessage": "The virtual hubs network's address space, specified as one address prefixes in CIDR notation (e.g. 192.168.1.0/24)"
@@ -117,9 +157,9 @@
                     {
                         "name": "esRegions",
                         "type": "Microsoft.Common.DropDown",
-                        "label": "Region for first virtual hub",
+                        "label": "Region for first virtual network hub",
                         "defaultValue": "",
-                        "visible": "[equals(steps('esConnectivityGoalState').esVwan, 'Yes')]",
+                        "visible": "[equals(steps('esGoalState').esHub, 'Yes')]",
                         "toolTip": "Select the target region for you connectivity deployment (requires you to provide a subscriptionId for connectivity)",
                         "constraints": {
                             "allowedValues": [
@@ -280,7 +320,7 @@
                         "type": "Microsoft.Common.OptionsGroup",
                         "label": "Deploy VPN Gateway",
                         "defaultValue": "No",
-                        "visible": "[equals(steps('esConnectivityGoalState').esVwan, 'Yes')]",
+                        "visible": "[equals(steps('esGoalState').esHub, 'Yes')]",
                         "toolTip": "If 'Yes' is selected when also adding a subscription for connectivity, ARM will deploy VPN gateway",
                         "constraints": {
                             "allowedValues": [
@@ -296,11 +336,43 @@
                         }
                     },
                     {
+                        "name": "esVpnGwType",
+                        "type": "Microsoft.Common.OptionsGroup",
+                        "label": "Select VPN type",
+                        "defaultValue": "Route Based",
+                        "visible": "[equals(steps('esGoalState').esVpnGw, 'Yes')]",
+                        "toolTip": "If 'Yes' is selected when also adding a subscription for connectivity, ARM will deploy VPN gateway. Select whether it should be policy or route based.",
+                        "constraints": {
+                            "allowedValues": [
+                                {
+                                    "label": "Policy Based",
+                                    "value": "PolicyBased"
+                                },
+                                {
+                                    "label": "Route Based",
+                                    "value": "RouteBased"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "name": "esAddressVpnOrEr",
+                        "type": "Microsoft.Common.TextBox",
+                        "label": "Subnet for VPN/Express route",
+                        "toolTip": "Provide address prefix in CIDR notation (e.g 10.100.1.0/24)",
+                        "defaultValue": "10.100.1.0/24",
+                        "visible": "[or(equals(steps('esGoalState').esErGw, 'Yes'), equals(steps('esGoalState').esVpnGw, 'Yes'))]",
+                        "constraints": {
+                            "required": true,
+                            "validationMessage": "The subnet network's address space, specified as one address prefixes in CIDR notation (e.g. 192.168.1.0/24)"
+                        }
+                    },
+                    {
                         "name": "esErGw",
                         "type": "Microsoft.Common.OptionsGroup",
                         "label": "Deploy ExpressRoute Gateway",
                         "defaultValue": "No",
-                        "visible": "[equals(steps('esConnectivityGoalState').esVwan, 'Yes')]",
+                        "visible": "[equals(steps('esGoalState').esHub, 'Yes')]",
                         "toolTip": "If 'Yes' is selected when also adding a subscription for connectivity, ARM will deploy Express Route gateway",
                         "constraints": {
                             "allowedValues": [
@@ -320,7 +392,7 @@
                         "type": "Microsoft.Common.OptionsGroup",
                         "label": "Deploy Azure Firewall",
                         "defaultValue": "No",
-                        "visible": "[equals(steps('esConnectivityGoalState').esVwan, 'Yes')]",
+                        "visible": "[equals(steps('esGoalState').esHub, 'Yes')]",
                         "toolTip": "If 'Yes' is selected when also adding a subscription for connectivity, ARM will deploy Azure Firewall",
                         "constraints": {
                             "allowedValues": [
@@ -334,19 +406,147 @@
                                 }
                             ]
                         }
+                    },
+                    {
+                        "name": "esAddressFw",
+                        "type": "Microsoft.Common.TextBox",
+                        "label": "Subnet for Azure Firewall",
+                        "toolTip": "Provide address prefix in CIDR notation (e.g 10.100.0.0/24)",
+                        "defaultValue": "10.100.0.0/24",
+                        "visible": "[equals(steps('esGoalState').esAzFw, 'Yes')]",
+                        "constraints": {
+                            "required": true,
+                            "validationMessage": "The subnet network's address space, specified as one address prefixes in CIDR notation (e.g. 192.168.1.0/24)"
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "lzGoalState",
+                "label": "Landing zone configuration",
+                "subLabel": {
+                    "preValidation": "Select 'Yes' if goal state should be enforced during deployment. Select 'No' if you want to do it post deployment using Azure Policy.",
+                    "postValidation": "Done"
+                },
+                "bladeTitle": "lzGs",
+                "elements": [
+                    {
+                        "name": "infoBox1",
+                        "type": "Microsoft.Common.InfoBox",
+                        "visible": true,
+                        "options": {
+                            "icon": "Info",
+                            "text": "You can optionally provide a subscription for your first landing zone, and also assign recommended policies that will ensure workloads will be secure, monitored, and protected according to best practices.",
+                            "uri": "https://github.com/Azure/Enterprise-Scale/blob/main/docs/Deploy/ES-schema.md"
+                        }
+                    },
+                    {
+                        "name": "lzSubsApi",
+                        "type": "Microsoft.Solutions.ArmApiControl",
+                        "request": {
+                            "method": "GET",
+                            "path": "subscriptions?api-version=2020-01-01"
+                        }
+                    },
+                    {
+                        "name": "esLzSub",
+                        "type": "Microsoft.Common.DropDown",
+                        "label": "Landing zone subscription (optional)",
+                        "toolTip": "",
+                        "multiselect": false,
+                        "selectAll": true,
+                        "filter": true,
+                        "filterPlaceholder": "Filter items ...",
+                        "multiLine": true,
+                        "visible": true,
+                        "constraints": {
+                            "allowedValues": "[map(steps('lzGoalState').lzSubsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"description\":\"', sub.subscriptionId, '\",\"value\":\"', toLower(sub.subscriptionId), '\"}')) )]",
+                            "required": false
+                        }
+                    },
+                    {
+                        "name": "lzMg",
+                        "type": "Microsoft.Common.DropDown",
+                        "label": "Management group for landing zone subscription",
+                        "placeholder": "",
+                        "defaultValue": "Online",
+                        "toolTip": "",
+                        "constraints": {
+                            "allowedValues": [
+                                {
+                                    "label": "Online",
+                                    "value": "online"
+                                },
+                                {
+                                    "label": "Corp",
+                                    "value": "corp"
+                                },
+                                {
+                                    "label": "Create new...",
+                                    "value": "new"
+                                }
+                            ],
+                            "required": true
+                        },
+                        "visible": "[not(empty(steps('lzGoalState').esLzSub))]"
+                    },
+                    {
+                        "name": "lzNewLz",
+                        "type": "Microsoft.Common.TextBox",
+                        "label": "Management group name",
+                        "placeholder": "",
+                        "defaultValue": "",
+                        "toolTip": "Use only allowed characters",
+                        "constraints": {
+                            "required": true,
+                            "regex": "^[a-z0-9A-Z]{1,30}$",
+                            "validationMessage": "Only alphanumeric characters are allowed, and the value must be 1-30 characters long."
+                        },
+                        "visible": "[equals(steps('lzGoalState').lzMg, 'new')]"
+                    },                    
+                    {
+                        "name": "lzPolicyApi",
+                        "type": "Microsoft.Solutions.ArmApiControl",
+                        "request": {
+                            "method": "GET",
+                            "path": "/providers/Microsoft.Authorization/policySetDefinitions?api-version=2019-09-01"
+                        }
+                    },
+                    {
+                        "name": "esLzPolicy",
+                        "type": "Microsoft.Common.DropDown",
+                        "label": "Assign built-in policy initiatives for your first landing zone",
+                        "toolTip": "",
+                        "multiselect": false,
+                        "selectAll": true,
+                        "filter": true,
+                        "filterPlaceholder": "Filter items ...",
+                        "multiLine": true,
+                        "visible": "[not(empty(steps('lzGoalState').esLzSub))]",
+                        "constraints": {
+                            "allowedValues": "[map(steps('lzGoalState').lzPolicyApi.value, (policy) => parse(concat('{\"label\":\"', policy.properties.displayName, '\",\"description\":\"', policy.description, '\",\"value\":\"', toLower(policy.properties.displayName), '\"}')) )]",
+                            "required": false
+                        }
                     }
                 ]
             }
         ],
         "outputs": {
+            "vpnGwType": "[steps('esGoalState').esVpnGwType]",
+            "subnetMaskForGw": "[steps('esGoalState').esAddressVpnOrEr]",
+            "subnetMaskForAzFw": "[steps('esGoalState').esAddressFw]",
+            "enableErGw": "[steps('esGoalState').esErGw]",
+            "enableVpnGw": "[steps('esGoalState').esVpnGw]",
+            "enableHub": "[steps('esGoalState').esHub]",
+            "enableAzFw": "[steps('esGoalState').esAzFw]",
+            "addressPrefix": "[steps('esGoalState').esAddressHub]",
+            "location": "[steps('esGoalState').esRegions]",
+            "managementSubscriptionId": "[steps('esGoalState').esMgmtSub]",
+            "lzSubscriptionId": "[steps('lzGoalState').esLzSub]",
+            "enableLogAnalytics": "[steps('esGoalState').esLogAnalytics]",
+            "enableAsc": "[steps('esGoalState').esAsc]",
             "enterpriseScaleCompanyPrefix": "[steps('lzSettings').esMgmtGroup]",
-            "enableErGw": "[steps('esConnectivityGoalState').esErGw]",
-            "enableVpnGw": "[steps('esConnectivityGoalState').esVpnGw]",
-            "enableVwan": "[steps('esConnectivityGoalState').esVwan]",
-            "connectivitySubscriptionId": "[steps('esConnectivityGoalState').esConnectivitySub]",
-            "enableAzFw": "[steps('esConnectivityGoalState').esAzFw]",
-            "addressPrefix": "[steps('esConnectivityGoalState').esAddress]",
-            "location": "[steps('esConnectivityGoalState').esRegions]"
+            "newLzMgmtGroup": "[steps('lzGoalState').lzNewLz]"
         }
     }
 }
